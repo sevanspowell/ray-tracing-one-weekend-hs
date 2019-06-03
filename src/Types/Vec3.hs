@@ -1,6 +1,19 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Types.Vec3 (Vec3(Vec3), vec3X, vec3Y, vec3Z) where
+module Types.Vec3 ( Vec3(Vec3)
+                  , vec3X
+                  , vec3Y
+                  , vec3Z
+                  , invert
+                  , add
+                  , sub
+                  , mul
+                  , div
+                  , scale
+                  , length
+                  , squaredLength
+                  , mkUnit
+                  ) where
 
 import Prelude (Float, Show, Eq, (+), (-), (*), (/), sqrt, negate, (.), (^))
 import Control.Lens.TH (makeLenses)
