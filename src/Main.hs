@@ -57,7 +57,39 @@ blueSky ray =
   in
     -- At 0.0: white, at 1.0: blue, lerp in-between
     toRGBColour $ simpleLerp white blue t
-  
+
+didHitSphere :: Vec3 -> Float -> Ray -> Bool
+didHitSphere center radius ray =
+  let
+    rOrigin      = ray ^. rayOrigin
+    rDir         = ray ^. rayDir
+
+    oc           = rOrigin `sub` center
+    a            = rDir `dot` rDir
+    b            = 2.0 * (oc `dot` rDir)
+    c            = (oc `dot` oc) - radius * radius
+
+    discriminant = b*b - 4*a*c
+  in
+    discriminant > 0
+
+blueSkyWithSphere :: Ray -> Colour
+blueSkyWithSphere ray = 
+  let
+    dir = ray ^. rayDir
+    t   = 0.5 * (dir ^. vec3Y + 1.0) 
+
+    white = Vec3 1.0 1.0 1.0
+    blue  = Vec3 0.5 0.7 1.0
+
+    sC = Vec3 0.0 0.0 (-1.0)
+    sR = 0.5
+  in
+    if didHitSphere sC sR ray
+    then toRGBColour $ Vec3 1.0 0.0 0.0
+    else toRGBColour $ simpleLerp white blue t
+
+-- Make these Ray -> (Colour -> Colour)
 
 simpleImageWrite :: Int -> Int -> IO ()
 simpleImageWrite numRows numCols = do
@@ -70,7 +102,7 @@ simpleImageWrite numRows numCols = do
       lowerLeftCorner = Vec3 (-2.0) (-1.0) (-1.0)
       horizontal      = Vec3 4.0 0.0 0.0
       vertical        = Vec3 0.0 2.0 0.0
-      origin          = Vec3 0.0 2.0 0.0
+      origin          = Vec3 0.0 0.0 0.0
 
     for_ [numRows-1,numRows-2..0] $ \y ->
       for_ [0..numCols-1] $ \x -> do
@@ -82,6 +114,7 @@ simpleImageWrite numRows numCols = do
           ray = mkRay origin (lowerLeftCorner `add` (horizontal `scale` u) `add` (vertical `scale` v))
 
         -- let col = testImage (fromIntegral x / fromIntegral numCols) (fromIntegral y / fromIntegral numRows)
-        let col = blueSky ray
+        -- let col = blueSky ray
+        let col = blueSkyWithSphere ray
 
         hPutStrLn h $ toPPMTriplet $ col

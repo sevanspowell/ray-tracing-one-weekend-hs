@@ -13,6 +13,7 @@ module Types.Vec3 ( Vec3(Vec3)
                   , length
                   , squaredLength
                   , mkUnit
+                  , dot
                   ) where
 
 import Prelude (Float, Show, Eq, (+), (-), (*), (/), sqrt, negate, (.), (^))
@@ -51,3 +52,6 @@ squaredLength (Vec3 x y z) = x^2 + y^2 + z^2
 
 mkUnit :: Vec3 -> Vec3
 mkUnit v = v `scale` (1 / length v)
+
+dot :: Vec3 -> Vec3 -> Float
+dot (Vec3 x1 y1 z1) (Vec3 x2 y2 z2) = x1*x2 + y1*y2 + z1*z2

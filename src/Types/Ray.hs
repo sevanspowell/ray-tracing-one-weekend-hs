@@ -9,6 +9,7 @@ import Types.Vec3
 data Ray = Ray { _rayOrigin :: Vec3
                , _rayDir    :: Vec3
                }
+  deriving (Eq, Show)
 makeLenses ''Ray
 
 -- Make a ray from origin and direction vectors, the direction vector
