@@ -54,6 +54,8 @@ library
   exposed-modules:     Types.Vec3
                        Types.Colour
                        Types.Ray
+                       Types.Hittable
+                       Types.Objects
   -- Modules included in this library but not exported.
   -- other-modules:
 
@@ -85,6 +87,7 @@ executable ray-tracing-one-weekend
   build-depends:       base
                      , lens
                      , ray-tracing-one-weekend
+                     , numeric-limits
 
   -- Directories containing source files.
   hs-source-dirs:      src

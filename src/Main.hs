@@ -6,10 +6,13 @@ module Main where
 import System.IO
 import Data.Foldable
 import Control.Lens
+import Numeric.Limits (maxValue)
 
 import Types.Colour
 import Types.Ray
 import Types.Vec3
+import Types.Hittable
+import Types.Objects
 
 main :: IO ()
 main = putStrLn "Hello, Haskell!"
@@ -111,6 +114,26 @@ blueSkyWithSphereNormals ray =
             Vec3 (n ^. vec3X + 1) (n ^. vec3Y + 1) (n ^. vec3Z + 1)
               `scale` 0.5
 
+blueSkyWithSphereNormals' :: Ray -> Colour
+blueSkyWithSphereNormals' ray =
+  case sphereHit ray 0.0 maxValue (Sphere (Vec3 0.0 0.0 (-1.0)) 0.5) of
+    Nothing ->
+      let
+        dir  = ray ^. rayDir
+        lerp = 0.5 * (dir ^. vec3Y + 1.0) 
+
+        white = Vec3 1.0 1.0 1.0
+        blue  = Vec3 0.5 0.7 1.0
+      in
+        toRGBColour $ simpleLerp white blue lerp
+    Just hi ->
+      let
+        n = hi ^. hiNormal
+      in
+        toRGBColour $
+          Vec3 (n ^. vec3X + 1) (n ^. vec3Y + 1) (n ^. vec3Z + 1)
+            `scale` 0.5
+    
 hitInfoSphere :: Vec3 -> Float -> Ray -> Maybe Float
 hitInfoSphere center radius ray = 
   let
@@ -153,6 +176,7 @@ simpleImageWrite numRows numCols = do
         -- let col = testImage (fromIntegral x / fromIntegral numCols) (fromIntegral y / fromIntegral numRows)
         -- let col = blueSky ray
         -- let col = blueSkyWithSphere ray
-        let col = blueSkyWithSphereNormals ray
+        -- let col = blueSkyWithSphereNormals ray
+        let col = blueSkyWithSphereNormals' ray
 
         hPutStrLn h $ toPPMTriplet $ col
