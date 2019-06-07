@@ -89,7 +89,44 @@ blueSkyWithSphere ray =
     then toRGBColour $ Vec3 1.0 0.0 0.0
     else toRGBColour $ simpleLerp white blue t
 
--- Make these Ray -> (Colour -> Colour)
+blueSkyWithSphereNormals :: Ray -> Colour
+blueSkyWithSphereNormals ray =
+  let
+    dir  = ray ^. rayDir
+    lerp = 0.5 * (dir ^. vec3Y + 1.0) 
+
+    white = Vec3 1.0 1.0 1.0
+    blue  = Vec3 0.5 0.7 1.0
+
+    sC = Vec3 0.0 0.0 (-1.0)
+    sR = 0.5
+  in
+    case hitInfoSphere sC sR ray of
+      Nothing -> toRGBColour $ simpleLerp white blue lerp
+      Just t  ->
+        let
+          n = mkUnit $ travel ray t `sub` sC
+        in
+          toRGBColour $
+            Vec3 (n ^. vec3X + 1) (n ^. vec3Y + 1) (n ^. vec3Z + 1)
+              `scale` 0.5
+
+hitInfoSphere :: Vec3 -> Float -> Ray -> Maybe Float
+hitInfoSphere center radius ray = 
+  let
+    rOrigin      = ray ^. rayOrigin
+    rDir         = ray ^. rayDir
+
+    oc           = rOrigin `sub` center
+    a            = rDir `dot` rDir
+    b            = 2.0 * (oc `dot` rDir)
+    c            = (oc `dot` oc) - radius * radius
+
+    discriminant = b*b - 4*a*c
+  in
+    if discriminant < 0
+    then Nothing
+    else Just $ ((-b) - sqrt(discriminant)) / (2.0 * a)
 
 simpleImageWrite :: Int -> Int -> IO ()
 simpleImageWrite numRows numCols = do
@@ -115,6 +152,7 @@ simpleImageWrite numRows numCols = do
 
         -- let col = testImage (fromIntegral x / fromIntegral numCols) (fromIntegral y / fromIntegral numRows)
         -- let col = blueSky ray
-        let col = blueSkyWithSphere ray
+        -- let col = blueSkyWithSphere ray
+        let col = blueSkyWithSphereNormals ray
 
         hPutStrLn h $ toPPMTriplet $ col
