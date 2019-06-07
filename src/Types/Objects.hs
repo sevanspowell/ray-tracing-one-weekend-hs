@@ -17,6 +17,8 @@ data Sphere
   deriving (Eq, Show)
 makeLenses ''Sphere
 
+data Object = ObjectSphere Sphere
+
 sphereHit :: HitFn Sphere
 sphereHit ray tMin tMax sphere = 
   let
@@ -44,3 +46,24 @@ sphereHit ray tMin tMax sphere =
         if t < tMax && t > tMin
         then Just $ HitInfo t p n
         else Nothing
+
+objectHit :: HitFn Object
+objectHit ray tMin tMax object =
+  case object of
+    ObjectSphere sphere -> sphereHit ray tMin tMax sphere
+
+listHit :: HitFn [Object]
+listHit ray tMin tMax = foldr hitClosest Nothing
+  where
+    hitClosest :: Object -> Maybe HitInfo -> Maybe HitInfo
+    -- We've hit nothing yet
+    hitClosest o Nothing = 
+      case objectHit ray tMin tMax o of
+        Nothing -> Nothing
+        Just hi -> Just hi
+    -- We've hit something before
+    hitClosest o (Just hi) =
+      case objectHit ray tMin (hi ^. hiTime) o of
+        Nothing  -> Just hi
+        Just hi' -> Just hi'
+  

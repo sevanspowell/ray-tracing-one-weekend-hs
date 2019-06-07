@@ -133,6 +133,29 @@ blueSkyWithSphereNormals' ray =
         toRGBColour $
           Vec3 (n ^. vec3X + 1) (n ^. vec3Y + 1) (n ^. vec3Z + 1)
             `scale` 0.5
+
+blueSkyColour :: Ray -> Colour
+blueSkyColour ray =
+  let
+    dir  = ray ^. rayDir
+    lerp = 0.5 * (dir ^. vec3Y + 1.0) 
+  
+    white = Vec3 1.0 1.0 1.0
+    blue  = Vec3 0.5 0.7 1.0
+  in
+    toRGBColour $ simpleLerp white blue lerp
+
+normalColour :: Vec3 -> Colour
+normalColour n = 
+  toRGBColour $
+    Vec3 (n ^. vec3X + 1) (n ^. vec3Y + 1) (n ^. vec3Z + 1)
+      `scale` 0.5
+
+wonderfulWorld :: HitFn a -> a -> Ray -> Colour
+wonderfulWorld hitFn world ray =
+  case hitFn ray 0.0 maxValue world of
+    Nothing -> blueSkyColour ray
+    Just hi -> normalColour (hi ^. hiNormal)
     
 hitInfoSphere :: Vec3 -> Float -> Ray -> Maybe Float
 hitInfoSphere center radius ray = 
@@ -177,6 +200,10 @@ simpleImageWrite numRows numCols = do
         -- let col = blueSky ray
         -- let col = blueSkyWithSphere ray
         -- let col = blueSkyWithSphereNormals ray
-        let col = blueSkyWithSphereNormals' ray
+        -- let col = blueSkyWithSphereNormals' ray
+        let world = [ ObjectSphere $ Sphere (Vec3 0.0 0.0 (-1.0)) 0.5
+                    , ObjectSphere $ Sphere (Vec3 0.0 (-100.5) (-1.0)) 100
+                    ]
+        let col = wonderfulWorld listHit world ray
 
         hPutStrLn h $ toPPMTriplet $ col
