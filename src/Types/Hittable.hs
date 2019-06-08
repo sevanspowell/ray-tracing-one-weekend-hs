@@ -3,8 +3,8 @@ module Types.Hittable where
 
 import Control.Lens.TH (makeLenses)
 
-import Types.Vec3
-import Types.Ray
+import Types.Vec3 (Vec3)
+import Types.Ray (Ray)
 
 data HitInfo
   = HitInfo { _hiTime   :: Float

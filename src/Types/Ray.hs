@@ -3,7 +3,7 @@ module Types.Ray (Ray, mkRay, travel, rayOrigin, rayDir) where
 
 import Control.Lens.TH (makeLenses)
 
-import Types.Vec3
+import Types.Vec3 (Vec3, mkUnit, add, scale)
 
 -- Ray = origin + t*dir
 data Ray = Ray { _rayOrigin :: Vec3

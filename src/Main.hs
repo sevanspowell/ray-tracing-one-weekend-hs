@@ -1,19 +1,24 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Main where
 
-import System.IO
-import Data.Foldable
-import Control.Lens
+import Prelude hiding (div)
+
+import System.IO (withFile, IOMode(WriteMode), hPutStrLn)
+import System.Random (newStdGen, random, StdGen)
+import Data.Foldable (for_)
+import Data.Function ((&))
+import Control.Lens ((^.))
 import Numeric.Limits (maxValue)
 
-import Types.Colour
-import Types.Ray
-import Types.Vec3
-import Types.Hittable
-import Types.Objects
-import Types.Camera
+import Types.Colour (Colour, clrR, clrG, clrB, mkColour)
+import Types.Ray (Ray, rayDir, rayOrigin, travel)
+import Types.Vec3 (Vec3(Vec3), scale, add, vec3Y, sub, dot, mkUnit, vec3X, vec3Z)
+import Types.Hittable (HitFn, hiNormal)
+import Types.Objects (sphereHit, Sphere(Sphere), Object(ObjectSphere), listHit)
+import Types.Camera (Camera(Camera), getRay)
 
 main :: IO ()
 main = putStrLn "Hello, Haskell!"
@@ -135,7 +140,7 @@ blueSkyWithSphereNormals' ray =
           Vec3 (n ^. vec3X + 1) (n ^. vec3Y + 1) (n ^. vec3Z + 1)
             `scale` 0.5
 
-blueSkyColour :: Ray -> Colour
+blueSkyColour :: Ray -> Vec3 
 blueSkyColour ray =
   let
     dir  = ray ^. rayDir
@@ -144,15 +149,14 @@ blueSkyColour ray =
     white = Vec3 1.0 1.0 1.0
     blue  = Vec3 0.5 0.7 1.0
   in
-    toRGBColour $ simpleLerp white blue lerp
+    simpleLerp white blue lerp
 
-normalColour :: Vec3 -> Colour
+normalColour :: Vec3 -> Vec3
 normalColour n = 
-  toRGBColour $
-    Vec3 (n ^. vec3X + 1) (n ^. vec3Y + 1) (n ^. vec3Z + 1)
-      `scale` 0.5
+  Vec3 (n ^. vec3X + 1) (n ^. vec3Y + 1) (n ^. vec3Z + 1)
+    `scale` 0.5
 
-wonderfulWorld :: HitFn a -> a -> Ray -> Colour
+wonderfulWorld :: HitFn a -> a -> Ray -> Vec3
 wonderfulWorld hitFn world ray =
   case hitFn ray 0.0 maxValue world of
     Nothing -> blueSkyColour ray
@@ -177,6 +181,8 @@ hitInfoSphere center radius ray =
 
 simpleImageWrite :: Int -> Int -> IO ()
 simpleImageWrite numRows numCols = do
+  randGen <- newStdGen
+
   withFile "test.ppm" WriteMode $ \h -> do
     hPutStrLn h $ "P3"
     hPutStrLn h $ show numCols <> " " <> show numRows
@@ -187,25 +193,39 @@ simpleImageWrite numRows numCols = do
       horizontal      = Vec3 4.0 0.0 0.0
       vertical        = Vec3 0.0 2.0 0.0
       origin          = Vec3 0.0 0.0 0.0
+
       cam = Camera origin lowerLeftCorner horizontal vertical
+      world = [ ObjectSphere $ Sphere (Vec3 0.0 0.0 (-1.0)) 0.5
+              , ObjectSphere $ Sphere (Vec3 0.0 (-100.5) (-1.0)) 100
+              ]
+      colourFn = wonderfulWorld listHit world
+
+      numSamples = 100
 
     for_ [numRows-1,numRows-2..0] $ \y ->
       for_ [0..numCols-1] $ \x -> do
-
         let
-          u = (fromIntegral x) / fromIntegral numCols
-          v = (fromIntegral y) / fromIntegral numRows
-        
-          ray = getRay cam u v
+          sampleAcc :: Int -> (StdGen, Vec3) -> (StdGen, Vec3)
+          sampleAcc _ (r, acc) =
+            let
+              (uRand :: Float, r')  = random r
+              (vRand :: Float, r'') = random r'
 
-        -- let col = testImage (fromIntegral x / fromIntegral numCols) (fromIntegral y / fromIntegral numRows)
-        -- let col = blueSky ray
-        -- let col = blueSkyWithSphere ray
-        -- let col = blueSkyWithSphereNormals ray
-        -- let col = blueSkyWithSphereNormals' ray
-        let world = [ ObjectSphere $ Sphere (Vec3 0.0 0.0 (-1.0)) 0.5
-                    , ObjectSphere $ Sphere (Vec3 0.0 (-100.5) (-1.0)) 100
-                    ]
-        let col = wonderfulWorld listHit world ray
+              u = ((fromIntegral x) + uRand) / fromIntegral numCols
+              v = ((fromIntegral y) + vRand) / fromIntegral numRows
+              ray = getRay cam u v
+            in
+              (r'', acc `add` colourFn ray)
 
-        hPutStrLn h $ toPPMTriplet $ col
+          col :: Vec3
+          col = foldr sampleAcc (randGen, Vec3 0 0 0) [0..numSamples - 1]
+                & snd
+                & (`scale` (1 / (fromIntegral numSamples)))
+
+          -- let col = testImage (fromIntegral x / fromIntegral numCols) (fromIntegral y / fromIntegral numRows)
+          -- let col = blueSky ray
+          -- let col = blueSkyWithSphere ray
+          -- let col = blueSkyWithSphereNormals ray
+          -- let col = blueSkyWithSphereNormals' ray
+
+        hPutStrLn h . toPPMTriplet . toRGBColour $ col

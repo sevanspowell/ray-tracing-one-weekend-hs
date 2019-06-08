@@ -73,6 +73,7 @@ library
   -- Base language which the package is written in.
   default-language:    Haskell2010
 
+  ghc-options:         -Wall -fwarn-tabs -fwarn-missing-import-lists
 
 executable ray-tracing-one-weekend
   -- .hs or .lhs file containing the Main module.
@@ -89,6 +90,7 @@ executable ray-tracing-one-weekend
                      , lens
                      , ray-tracing-one-weekend
                      , numeric-limits
+                     , random
 
   -- Directories containing source files.
   hs-source-dirs:      src
@@ -96,3 +98,4 @@ executable ray-tracing-one-weekend
   -- Base language which the package is written in.
   default-language:    Haskell2010
 
+  ghc-options:         -Wall -fwarn-tabs -fwarn-missing-import-lists

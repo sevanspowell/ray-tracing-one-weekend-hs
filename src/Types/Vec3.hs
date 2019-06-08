@@ -16,7 +16,7 @@ module Types.Vec3 ( Vec3(Vec3)
                   , dot
                   ) where
 
-import Prelude (Float, Show, Eq, (+), (-), (*), (/), sqrt, negate, (.), (^))
+import Prelude (Float, Show, Eq, (+), (-), (*), (/), sqrt, negate, (.))
 import Control.Lens.TH (makeLenses)
 
 data Vec3 = Vec3 { _vec3X :: Float
@@ -48,7 +48,7 @@ length :: Vec3 -> Float
 length = sqrt . squaredLength
 
 squaredLength :: Vec3 -> Float
-squaredLength (Vec3 x y z) = x^2 + y^2 + z^2
+squaredLength (Vec3 x y z) = x*x + y*y + z*z
 
 mkUnit :: Vec3 -> Vec3
 mkUnit v = v `scale` (1 / length v)

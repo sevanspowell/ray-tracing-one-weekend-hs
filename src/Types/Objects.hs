@@ -6,9 +6,9 @@ module Types.Objects where
 import Control.Lens ((^.))
 import Control.Lens.TH (makeLenses)
 
-import Types.Hittable
-import Types.Vec3
-import Types.Ray
+import Types.Hittable (HitFn, HitInfo(HitInfo), hiTime)
+import Types.Vec3 (Vec3, sub, dot, scale)
+import Types.Ray (rayOrigin, rayDir, travel)
 
 data Sphere
   = Sphere { _sphereC :: Vec3

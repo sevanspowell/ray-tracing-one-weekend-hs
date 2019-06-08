@@ -4,7 +4,7 @@ module Types.Colour (Colour, clrR, clrG, clrB, mkColour) where
 import Data.Function ((&))
 import Control.Lens (lens, (^.), (.~), Lens')
 
-import Types.Vec3
+import Types.Vec3 (Vec3(Vec3), vec3X, vec3Y, vec3Z)
 
 newtype Colour = Colour Vec3
 
