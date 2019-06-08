@@ -14,9 +14,9 @@ import Control.Lens ((^.))
 import Numeric.Limits (maxValue)
 
 import Types.Colour (Colour, clrR, clrG, clrB, mkColour)
-import Types.Ray (Ray, rayDir, rayOrigin, travel)
-import Types.Vec3 (Vec3(Vec3), scale, add, vec3Y, sub, dot, mkUnit, vec3X, vec3Z)
-import Types.Hittable (HitFn, hiNormal)
+import Types.Ray (Ray, rayDir, rayOrigin, travel, mkRay)
+import Types.Vec3 (Vec3(Vec3), scale, add, vec3Y, sub, dot, mkUnit, vec3X, vec3Z, squaredLength)
+import Types.Hittable (HitFn, hiNormal, hiPos)
 import Types.Objects (sphereHit, Sphere(Sphere), Object(ObjectSphere), listHit)
 import Types.Camera (Camera(Camera), getRay)
 
@@ -161,6 +161,22 @@ wonderfulWorld hitFn world ray =
   case hitFn ray 0.0 maxValue world of
     Nothing -> blueSkyColour ray
     Just hi -> normalColour (hi ^. hiNormal)
+
+wonderfulWorldMat :: HitFn a -> a -> Ray -> StdGen -> (StdGen, Vec3)
+wonderfulWorldMat hitFn world ray randGen =
+  case hitFn ray 0.0001 maxValue world of
+    Nothing -> (randGen, blueSkyColour ray)
+    Just hi ->
+      let
+        hitPos = hi ^. hiPos
+        hitNormal = hi ^. hiNormal
+        (randGen', target) = (fmap (hitPos `add` hitNormal `add`)) (randomInUnitSphere randGen)
+
+        rayO = hitPos
+        rayD = target `sub` hitPos
+        newRay = mkRay rayO rayD
+      in
+        (`scale` 0.5) <$> wonderfulWorldMat hitFn world newRay randGen'
     
 hitInfoSphere :: Vec3 -> Float -> Ray -> Maybe Float
 hitInfoSphere center radius ray = 
@@ -178,6 +194,31 @@ hitInfoSphere center radius ray =
     if discriminant < 0
     then Nothing
     else Just $ ((-b) - sqrt(discriminant)) / (2.0 * a)
+
+-- TODO Use MonadState and helper function to thread generator
+randomInUnitSphere :: StdGen -> (StdGen, Vec3)
+randomInUnitSphere r =
+  let
+    (rX, r')   = random r
+    (rY, r'')  = random r'
+    (rZ, r''') = random r''
+    p = (Vec3 rX rY rZ `scale` 2.0) `sub` (Vec3 1 1 1)
+  in
+    if squaredLength p >= 1.0
+    then randomInUnitSphere r'''
+    else (r''', p)
+
+-- TODO tool for visualizing the output of 100 calls of some of these functions
+
+testR :: IO ()
+testR = do
+  r <- newStdGen
+  let (r', v1)  = randomInUnitSphere r
+  let (r'', v2) = randomInUnitSphere r'
+  let (_, v3)   = randomInUnitSphere r''
+  print v1
+  print v2
+  print v3
 
 simpleImageWrite :: Int -> Int -> IO ()
 simpleImageWrite numRows numCols = do
@@ -198,7 +239,7 @@ simpleImageWrite numRows numCols = do
       world = [ ObjectSphere $ Sphere (Vec3 0.0 0.0 (-1.0)) 0.5
               , ObjectSphere $ Sphere (Vec3 0.0 (-100.5) (-1.0)) 100
               ]
-      colourFn = wonderfulWorld listHit world
+      colourFn = wonderfulWorldMat listHit world
 
       numSamples = 100
 
@@ -208,19 +249,22 @@ simpleImageWrite numRows numCols = do
           sampleAcc :: Int -> (StdGen, Vec3) -> (StdGen, Vec3)
           sampleAcc _ (r, acc) =
             let
-              (uRand :: Float, r')  = random r
-              (vRand :: Float, r'') = random r'
+              (uRand, r')  = random r
+              (vRand, r'') = random r'
 
               u = ((fromIntegral x) + uRand) / fromIntegral numCols
               v = ((fromIntegral y) + vRand) / fromIntegral numRows
               ray = getRay cam u v
             in
-              (r'', acc `add` colourFn ray)
+              (acc `add`) <$> colourFn ray r''
+
+          gammaCorrect c = Vec3 (sqrt(c ^. vec3X)) (sqrt(c ^. vec3Y)) (sqrt(c ^. vec3Z))
 
           col :: Vec3
           col = foldr sampleAcc (randGen, Vec3 0 0 0) [0..numSamples - 1]
                 & snd
                 & (`scale` (1 / (fromIntegral numSamples)))
+                & gammaCorrect
 
           -- let col = testImage (fromIntegral x / fromIntegral numCols) (fromIntegral y / fromIntegral numRows)
           -- let col = blueSky ray
