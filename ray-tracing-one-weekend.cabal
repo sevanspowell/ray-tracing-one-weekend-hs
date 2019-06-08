@@ -54,9 +54,10 @@ library
   exposed-modules:     Types.Vec3
                        Types.Colour
                        Types.Ray
-                       Types.Hittable
                        Types.Objects
                        Types.Camera
+                       Types.Types
+                       Types.Random
   -- Modules included in this library but not exported.
   -- other-modules:
 
@@ -66,6 +67,8 @@ library
   -- Other library packages from which modules are imported.
   build-depends:       base
                      , lens
+                     , random
+                     , mtl
 
   -- Directories containing source files.
   hs-source-dirs:      src

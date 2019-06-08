@@ -7,22 +7,24 @@ module Main where
 import Prelude hiding (div)
 
 import System.IO (withFile, IOMode(WriteMode), hPutStrLn)
-import System.Random (newStdGen, getStdGen, random, StdGen, RandomGen, Random)
+import System.Random (RandomGen, newStdGen)
 import Data.Foldable (for_)
 import Data.Function ((&))
+import Data.Maybe (isJust)
 import Control.Lens ((^.))
 import Control.Monad (foldM)
-import Control.Monad.State.Class (MonadState, get, put)
+import Control.Monad.State.Class (MonadState)
 import Control.Monad.State (evalStateT, evalState)
 import Control.Monad.IO.Class (liftIO)
 import Numeric.Limits (maxValue)
 
 import Types.Colour (Colour, clrR, clrG, clrB, mkColour)
 import Types.Ray (Ray, rayDir, rayOrigin, travel, mkRay)
-import Types.Vec3 (Vec3(Vec3), scale, add, vec3Y, sub, dot, mkUnit, vec3X, vec3Z, squaredLength)
-import Types.Hittable (HitFn, hiNormal, hiPos)
+import Types.Vec3 (Vec3(Vec3), scale, add, vec3Y, sub, dot, mkUnit, vec3X, vec3Z, mul)
+import Types.Types (HitFn, hiNormal, hiPos, lambertian, hiMaterial, metal, scatAttenuation, scatRay)
 import Types.Objects (sphereHit, Sphere(Sphere), Object(ObjectSphere), listHit)
 import Types.Camera (Camera(Camera), getRay)
+import Types.Random (randomInUnitSphere, nextRandom)
 
 main :: IO ()
 main = putStrLn "Hello, Haskell!"
@@ -57,93 +59,6 @@ toRGBColour (Vec3 r g b) = mkColour (toColourChannel r) (toColourChannel g) (toC
 toColourChannel :: Float -> Int
 toColourChannel x = truncate $ x * 255.99
 
-blueSky :: Ray -> Colour
-blueSky ray =
-  let
-    dir = ray ^. rayDir
-    -- Convert y-component of ray direction (-1.0 <= y <= 1.0)
-    -- to (0.0 <= y <= 2.0) then (0.0 <= y <= 1.0).
-    t   = 0.5 * (dir ^. vec3Y + 1.0) 
-
-    white = Vec3 1.0 1.0 1.0
-    blue  = Vec3 0.5 0.7 1.0
-  in
-    -- At 0.0: white, at 1.0: blue, lerp in-between
-    toRGBColour $ simpleLerp white blue t
-
-didHitSphere :: Vec3 -> Float -> Ray -> Bool
-didHitSphere center radius ray =
-  let
-    rOrigin      = ray ^. rayOrigin
-    rDir         = ray ^. rayDir
-
-    oc           = rOrigin `sub` center
-    a            = rDir `dot` rDir
-    b            = 2.0 * (oc `dot` rDir)
-    c            = (oc `dot` oc) - radius * radius
-
-    discriminant = b*b - 4*a*c
-  in
-    discriminant > 0
-
-blueSkyWithSphere :: Ray -> Colour
-blueSkyWithSphere ray = 
-  let
-    dir = ray ^. rayDir
-    t   = 0.5 * (dir ^. vec3Y + 1.0) 
-
-    white = Vec3 1.0 1.0 1.0
-    blue  = Vec3 0.5 0.7 1.0
-
-    sC = Vec3 0.0 0.0 (-1.0)
-    sR = 0.5
-  in
-    if didHitSphere sC sR ray
-    then toRGBColour $ Vec3 1.0 0.0 0.0
-    else toRGBColour $ simpleLerp white blue t
-
-blueSkyWithSphereNormals :: Ray -> Colour
-blueSkyWithSphereNormals ray =
-  let
-    dir  = ray ^. rayDir
-    lerp = 0.5 * (dir ^. vec3Y + 1.0) 
-
-    white = Vec3 1.0 1.0 1.0
-    blue  = Vec3 0.5 0.7 1.0
-
-    sC = Vec3 0.0 0.0 (-1.0)
-    sR = 0.5
-  in
-    case hitInfoSphere sC sR ray of
-      Nothing -> toRGBColour $ simpleLerp white blue lerp
-      Just t  ->
-        let
-          n = mkUnit $ travel ray t `sub` sC
-        in
-          toRGBColour $
-            Vec3 (n ^. vec3X + 1) (n ^. vec3Y + 1) (n ^. vec3Z + 1)
-              `scale` 0.5
-
-blueSkyWithSphereNormals' :: Ray -> Colour
-blueSkyWithSphereNormals' ray =
-  case sphereHit ray 0.0 maxValue (Sphere (Vec3 0.0 0.0 (-1.0)) 0.5) of
-    Nothing ->
-      let
-        dir  = ray ^. rayDir
-        lerp = 0.5 * (dir ^. vec3Y + 1.0) 
-
-        white = Vec3 1.0 1.0 1.0
-        blue  = Vec3 0.5 0.7 1.0
-      in
-        toRGBColour $ simpleLerp white blue lerp
-    Just hi ->
-      let
-        n = hi ^. hiNormal
-      in
-        toRGBColour $
-          Vec3 (n ^. vec3X + 1) (n ^. vec3Y + 1) (n ^. vec3Z + 1)
-            `scale` 0.5
-
 blueSkyColour :: Ray -> Vec3 
 blueSkyColour ray =
   let
@@ -160,37 +75,29 @@ normalColour n =
   Vec3 (n ^. vec3X + 1) (n ^. vec3Y + 1) (n ^. vec3Z + 1)
     `scale` 0.5
 
-wonderfulWorld :: HitFn a -> a -> Ray -> Vec3
-wonderfulWorld hitFn world ray =
-  case hitFn ray 0.0 maxValue world of
-    Nothing -> blueSkyColour ray
-    Just hi -> normalColour (hi ^. hiNormal)
+withMaterials :: (RandomGen g, MonadState g m) => HitFn m a -> a -> Ray -> m Vec3
+withMaterials = go 0
+  where
+    go :: (RandomGen g, MonadState g m) => Int -> HitFn m a -> a -> Ray -> m Vec3
+    go depth hitFn world ray =
+      case hitFn ray 0.001 maxValue world of
+        Nothing -> pure $ blueSkyColour ray
+        Just hi -> do
+          let material = hi ^. hiMaterial
 
-wonderfulWorldMat :: (RandomGen g, MonadState g m) => HitFn a -> a -> Ray -> m Vec3
-wonderfulWorldMat hitFn world ray =
-  case hitFn ray 0.001 maxValue world of
-    Nothing -> pure $ blueSkyColour ray
-    Just hi -> do
-      let
-        hitPos = hi ^. hiPos
-        hitNormal = hi ^. hiNormal
+          mScattered <- material ray hi
 
-      unitSpherePoint <- randomInUnitSphere
-      let
-        target = hitPos `add` hitNormal `add` unitSpherePoint
-
-        rayO = hitPos
-        rayD = target `sub` hitPos
-        newRay = mkRay rayO rayD
-
-      (`scale` 0.5) <$> wonderfulWorldMat hitFn world newRay
-
-nextRandom :: (RandomGen g, MonadState g m, Random a) => m a
-nextRandom = do
-  g <- get
-  let (a, g') = random g
-  put g'
-  pure a
+          case mScattered of
+            Just scattered
+              | depth < 50 -> do
+              colour <- go (depth + 1) hitFn world (scattered ^. scatRay)
+              pure $
+                (scattered ^. scatAttenuation) `mul` colour
+            otherwise ->
+              pure $ Vec3 0 0 0
+            
+          -- let
+          --   hi pf
 
 testNextRandom :: IO ()
 testNextRandom = do
@@ -221,19 +128,6 @@ hitInfoSphere center radius ray =
     then Nothing
     else Just $ ((-b) - sqrt(discriminant)) / (2.0 * a)
 
--- TODO Use MonadState and helper function to thread generator
-randomInUnitSphere :: (RandomGen g, MonadState g m) => m Vec3
-randomInUnitSphere = do
-  rX <- nextRandom
-  rY <- nextRandom
-  rZ <- nextRandom
-
-  let p = ((Vec3 rX rY rZ) `scale` 2.0) `sub` (Vec3 1 1 1)
-
-  if squaredLength p >= 1.0
-  then randomInUnitSphere
-  else pure p
-
 -- TODO tool for visualizing the output of 100 calls of some of these functions
 
 testR :: IO ()
@@ -262,12 +156,12 @@ simpleImageWrite numRows numCols = do
       origin          = Vec3 0.0 0.0 0.0
 
       cam = Camera origin lowerLeftCorner horizontal vertical
-      world = [ ObjectSphere $ Sphere (Vec3 0.0 0.0 (-1.0)) 0.5
-              , ObjectSphere $ Sphere (Vec3 0.0 (-100.5) (-1.0)) 100
+      world = [ ObjectSphere $ Sphere (Vec3 0.0 0.0 (-1.0)) 0.5 (lambertian $ Vec3 0.8 0.3 0.3)
+              , ObjectSphere $ Sphere (Vec3 0.0 (-100.5) (-1.0)) 100 (lambertian $ Vec3 0.8 0.8 0)
               ]
 
-      colourFn :: (RandomGen g, MonadState g m) => Ray -> m Vec3
-      colourFn = wonderfulWorldMat listHit world
+      -- colourFn :: (RandomGen g, MonadState g m) => Ray -> m Vec3
+      colourFn = withMaterials listHit world
 
       numSamples = 100
 
@@ -276,7 +170,7 @@ simpleImageWrite numRows numCols = do
         g <- newStdGen
 
         let
-          sampleAcc :: (RandomGen g, MonadState g m) => Vec3 -> Int -> m Vec3
+          -- sampleAcc :: (RandomGen g, MonadState g m) => Vec3 -> Int -> m Vec3
           sampleAcc acc _ = do
             (uRand :: Float) <- nextRandom
             (vRand :: Float) <- nextRandom

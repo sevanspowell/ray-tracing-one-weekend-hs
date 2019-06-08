@@ -14,6 +14,7 @@ module Types.Vec3 ( Vec3(Vec3)
                   , squaredLength
                   , mkUnit
                   , dot
+                  , reflect
                   ) where
 
 import Prelude (Float, Show, Eq, (+), (-), (*), (/), sqrt, negate, (.))
@@ -55,3 +56,11 @@ mkUnit v = v `scale` (1 / length v)
 
 dot :: Vec3 -> Vec3 -> Float
 dot (Vec3 x1 y1 z1) (Vec3 x2 y2 z2) = x1*x2 + y1*y2 + z1*z2
+
+reflect
+  :: Vec3
+  -- ^ Reflect this ray
+  -> Vec3
+  -- ^ around this normal
+  -> Vec3
+reflect v n = v `sub` (n `scale` (2 * dot v n))
