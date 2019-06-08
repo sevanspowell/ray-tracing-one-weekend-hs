@@ -168,7 +168,7 @@ wonderfulWorld hitFn world ray =
 
 wonderfulWorldMat :: (RandomGen g, MonadState g m) => HitFn a -> a -> Ray -> m Vec3
 wonderfulWorldMat hitFn world ray =
-  case hitFn ray 0.0 maxValue world of
+  case hitFn ray 0.001 maxValue world of
     Nothing -> pure $ blueSkyColour ray
     Just hi -> do
       let
@@ -265,9 +265,9 @@ simpleImageWrite numRows numCols = do
       world = [ ObjectSphere $ Sphere (Vec3 0.0 0.0 (-1.0)) 0.5
               , ObjectSphere $ Sphere (Vec3 0.0 (-100.5) (-1.0)) 100
               ]
+
       colourFn :: (RandomGen g, MonadState g m) => Ray -> m Vec3
       colourFn = wonderfulWorldMat listHit world
-      -- colourFn = wonderfulWorld listHit world
 
       numSamples = 100
 
@@ -288,9 +288,13 @@ simpleImageWrite numRows numCols = do
 
             (acc `add`) <$> colourFn ray
 
+          gammaCorrect c = Vec3 (sqrt(c ^. vec3X)) (sqrt(c ^. vec3Y)) (sqrt(c ^. vec3Z))
+
           col :: Vec3
           col = foldM sampleAcc (Vec3 0 0 0) [0..numSamples-1]
                 & flip evalState g 
                 & (`scale` (1 / (fromIntegral numSamples)))
+                & gammaCorrect
+
 
         hPutStrLn h . toPPMTriplet . toRGBColour $ col
