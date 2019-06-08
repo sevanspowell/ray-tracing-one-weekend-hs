@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
-module Types.Ray where
+module Types.Ray (Ray, mkRay, travel, rayOrigin, rayDir) where
 
 import Control.Lens.TH (makeLenses)
 

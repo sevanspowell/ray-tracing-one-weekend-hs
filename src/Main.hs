@@ -13,6 +13,7 @@ import Types.Ray
 import Types.Vec3
 import Types.Hittable
 import Types.Objects
+import Types.Camera
 
 main :: IO ()
 main = putStrLn "Hello, Haskell!"
@@ -186,6 +187,7 @@ simpleImageWrite numRows numCols = do
       horizontal      = Vec3 4.0 0.0 0.0
       vertical        = Vec3 0.0 2.0 0.0
       origin          = Vec3 0.0 0.0 0.0
+      cam = Camera origin lowerLeftCorner horizontal vertical
 
     for_ [numRows-1,numRows-2..0] $ \y ->
       for_ [0..numCols-1] $ \x -> do
@@ -194,7 +196,7 @@ simpleImageWrite numRows numCols = do
           u = (fromIntegral x) / fromIntegral numCols
           v = (fromIntegral y) / fromIntegral numRows
         
-          ray = mkRay origin (lowerLeftCorner `add` (horizontal `scale` u) `add` (vertical `scale` v))
+          ray = getRay cam u v
 
         -- let col = testImage (fromIntegral x / fromIntegral numCols) (fromIntegral y / fromIntegral numRows)
         -- let col = blueSky ray
