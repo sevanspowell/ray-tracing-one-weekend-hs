@@ -7,10 +7,14 @@ module Main where
 import Prelude hiding (div)
 
 import System.IO (withFile, IOMode(WriteMode), hPutStrLn)
-import System.Random (newStdGen, random, StdGen)
+import System.Random (newStdGen, getStdGen, random, StdGen, RandomGen, Random)
 import Data.Foldable (for_)
 import Data.Function ((&))
 import Control.Lens ((^.))
+import Control.Monad (foldM)
+import Control.Monad.State.Class (MonadState, get, put)
+import Control.Monad.State (evalStateT, evalState)
+import Control.Monad.IO.Class (liftIO)
 import Numeric.Limits (maxValue)
 
 import Types.Colour (Colour, clrR, clrG, clrB, mkColour)
@@ -162,21 +166,43 @@ wonderfulWorld hitFn world ray =
     Nothing -> blueSkyColour ray
     Just hi -> normalColour (hi ^. hiNormal)
 
-wonderfulWorldMat :: HitFn a -> a -> Ray -> StdGen -> (StdGen, Vec3)
-wonderfulWorldMat hitFn world ray randGen =
-  case hitFn ray 0.0001 maxValue world of
-    Nothing -> (randGen, blueSkyColour ray)
-    Just hi ->
+wonderfulWorldMat :: (RandomGen g, MonadState g m) => HitFn a -> a -> Ray -> m Vec3
+wonderfulWorldMat hitFn world ray =
+  case hitFn ray 0.0 maxValue world of
+    Nothing -> pure $ blueSkyColour ray
+    Just hi -> do
       let
         hitPos = hi ^. hiPos
         hitNormal = hi ^. hiNormal
-        (randGen', target) = (fmap (hitPos `add` hitNormal `add`)) (randomInUnitSphere randGen)
+
+      unitSpherePoint <- randomInUnitSphere
+      let
+        target = hitPos `add` hitNormal `add` unitSpherePoint
 
         rayO = hitPos
         rayD = target `sub` hitPos
         newRay = mkRay rayO rayD
-      in
-        (`scale` 0.5) <$> wonderfulWorldMat hitFn world newRay randGen'
+
+      (`scale` 0.5) <$> wonderfulWorldMat hitFn world newRay
+
+nextRandom :: (RandomGen g, MonadState g m, Random a) => m a
+nextRandom = do
+  g <- get
+  let (a, g') = random g
+  put g'
+  pure a
+
+testNextRandom :: IO ()
+testNextRandom = do
+  g <- newStdGen
+  (flip evalStateT) g $ do
+    (r1 :: Double) <- nextRandom
+    (r2 :: Double) <- nextRandom
+    (r3 :: Double) <- nextRandom
+    liftIO $ do
+      print r1
+      print r2
+      print r3
     
 hitInfoSphere :: Vec3 -> Float -> Ray -> Maybe Float
 hitInfoSphere center radius ray = 
@@ -196,34 +222,34 @@ hitInfoSphere center radius ray =
     else Just $ ((-b) - sqrt(discriminant)) / (2.0 * a)
 
 -- TODO Use MonadState and helper function to thread generator
-randomInUnitSphere :: StdGen -> (StdGen, Vec3)
-randomInUnitSphere r =
-  let
-    (rX, r')   = random r
-    (rY, r'')  = random r'
-    (rZ, r''') = random r''
-    p = (Vec3 rX rY rZ `scale` 2.0) `sub` (Vec3 1 1 1)
-  in
-    if squaredLength p >= 1.0
-    then randomInUnitSphere r'''
-    else (r''', p)
+randomInUnitSphere :: (RandomGen g, MonadState g m) => m Vec3
+randomInUnitSphere = do
+  rX <- nextRandom
+  rY <- nextRandom
+  rZ <- nextRandom
+
+  let p = ((Vec3 rX rY rZ) `scale` 2.0) `sub` (Vec3 1 1 1)
+
+  if squaredLength p >= 1.0
+  then randomInUnitSphere
+  else pure p
 
 -- TODO tool for visualizing the output of 100 calls of some of these functions
 
 testR :: IO ()
 testR = do
-  r <- newStdGen
-  let (r', v1)  = randomInUnitSphere r
-  let (r'', v2) = randomInUnitSphere r'
-  let (_, v3)   = randomInUnitSphere r''
-  print v1
-  print v2
-  print v3
+  g <- newStdGen
+  flip evalStateT g $ do
+    v1 <- randomInUnitSphere
+    v2 <- randomInUnitSphere
+    v3 <- randomInUnitSphere
+    liftIO $ do
+      print v1
+      print v2
+      print v3
 
 simpleImageWrite :: Int -> Int -> IO ()
 simpleImageWrite numRows numCols = do
-  randGen <- newStdGen
-
   withFile "test.ppm" WriteMode $ \h -> do
     hPutStrLn h $ "P3"
     hPutStrLn h $ show numCols <> " " <> show numRows
@@ -239,37 +265,32 @@ simpleImageWrite numRows numCols = do
       world = [ ObjectSphere $ Sphere (Vec3 0.0 0.0 (-1.0)) 0.5
               , ObjectSphere $ Sphere (Vec3 0.0 (-100.5) (-1.0)) 100
               ]
+      colourFn :: (RandomGen g, MonadState g m) => Ray -> m Vec3
       colourFn = wonderfulWorldMat listHit world
+      -- colourFn = wonderfulWorld listHit world
 
       numSamples = 100
 
     for_ [numRows-1,numRows-2..0] $ \y ->
       for_ [0..numCols-1] $ \x -> do
+        g <- newStdGen
+
         let
-          sampleAcc :: Int -> (StdGen, Vec3) -> (StdGen, Vec3)
-          sampleAcc _ (r, acc) =
+          sampleAcc :: (RandomGen g, MonadState g m) => Vec3 -> Int -> m Vec3
+          sampleAcc acc _ = do
+            (uRand :: Float) <- nextRandom
+            (vRand :: Float) <- nextRandom
+
             let
-              (uRand, r')  = random r
-              (vRand, r'') = random r'
-
-              u = ((fromIntegral x) + uRand) / fromIntegral numCols
-              v = ((fromIntegral y) + vRand) / fromIntegral numRows
+              u = ((fromIntegral x) + uRand) / (fromIntegral numCols)
+              v = ((fromIntegral y) + vRand) / (fromIntegral numRows)
               ray = getRay cam u v
-            in
-              (acc `add`) <$> colourFn ray r''
 
-          gammaCorrect c = Vec3 (sqrt(c ^. vec3X)) (sqrt(c ^. vec3Y)) (sqrt(c ^. vec3Z))
+            (acc `add`) <$> colourFn ray
 
           col :: Vec3
-          col = foldr sampleAcc (randGen, Vec3 0 0 0) [0..numSamples - 1]
-                & snd
+          col = foldM sampleAcc (Vec3 0 0 0) [0..numSamples-1]
+                & flip evalState g 
                 & (`scale` (1 / (fromIntegral numSamples)))
-                & gammaCorrect
-
-          -- let col = testImage (fromIntegral x / fromIntegral numCols) (fromIntegral y / fromIntegral numRows)
-          -- let col = blueSky ray
-          -- let col = blueSkyWithSphere ray
-          -- let col = blueSkyWithSphereNormals ray
-          -- let col = blueSkyWithSphereNormals' ray
 
         hPutStrLn h . toPPMTriplet . toRGBColour $ col

@@ -91,6 +91,7 @@ executable ray-tracing-one-weekend
                      , ray-tracing-one-weekend
                      , numeric-limits
                      , random
+                     , mtl
 
   -- Directories containing source files.
   hs-source-dirs:      src
