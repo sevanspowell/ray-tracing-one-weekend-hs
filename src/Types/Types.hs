@@ -68,4 +68,8 @@ metal albedo rayIn hi =
   in
     pure . Just $ ScatteredRay attenuation scattered
 
-    
+-- dielectrics
+--   :: Float
+--   -- ^ Reflective index
+--   -> Material m
+-- dielectrics reflIndex rayIn hi =
