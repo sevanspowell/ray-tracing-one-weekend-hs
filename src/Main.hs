@@ -158,6 +158,8 @@ simpleImageWrite numRows numCols = do
       cam = Camera origin lowerLeftCorner horizontal vertical
       world = [ ObjectSphere $ Sphere (Vec3 0.0 0.0 (-1.0)) 0.5 (lambertian $ Vec3 0.8 0.3 0.3)
               , ObjectSphere $ Sphere (Vec3 0.0 (-100.5) (-1.0)) 100 (lambertian $ Vec3 0.8 0.8 0)
+              , ObjectSphere $ Sphere (Vec3 1 0 (-1)) 0.5 (metal $ Vec3 0.8 0.6 0.2)
+              , ObjectSphere $ Sphere (Vec3 (-1) 0 (-1)) 0.5 (metal $ Vec3 0.8 0.8 0.8)
               ]
 
       -- colourFn :: (RandomGen g, MonadState g m) => Ray -> m Vec3
