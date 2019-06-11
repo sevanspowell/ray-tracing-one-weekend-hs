@@ -21,7 +21,7 @@ import Numeric.Limits (maxValue)
 import Types.Colour (Colour, clrR, clrG, clrB, mkColour)
 import Types.Ray (Ray, rayDir, rayOrigin, travel, mkRay)
 import Types.Vec3 (Vec3(Vec3), scale, add, vec3Y, sub, dot, mkUnit, vec3X, vec3Z, mul)
-import Types.Types (HitFn, hiNormal, hiPos, lambertian, hiMaterial, metal, scatAttenuation, scatRay)
+import Types.Types (HitFn, hiNormal, hiPos, lambertian, hiMaterial, metal, scatAttenuation, scatRay, dielectric)
 import Types.Objects (sphereHit, Sphere(Sphere), Object(ObjectSphere), listHit)
 import Types.Camera (Camera(Camera), getRay)
 import Types.Random (randomInUnitSphere, nextRandom)
@@ -156,10 +156,10 @@ simpleImageWrite numRows numCols = do
       origin          = Vec3 0.0 0.0 0.0
 
       cam = Camera origin lowerLeftCorner horizontal vertical
-      world = [ ObjectSphere $ Sphere (Vec3 0.0 0.0 (-1.0)) 0.5 (lambertian $ Vec3 0.8 0.3 0.3)
+      world = [ ObjectSphere $ Sphere (Vec3 0.0 0.0 (-1.0)) 0.5 (lambertian $ Vec3 0.1 0.2 0.5)
               , ObjectSphere $ Sphere (Vec3 0.0 (-100.5) (-1.0)) 100 (lambertian $ Vec3 0.8 0.8 0)
               , ObjectSphere $ Sphere (Vec3 1 0 (-1)) 0.5 (metal $ Vec3 0.8 0.6 0.2)
-              , ObjectSphere $ Sphere (Vec3 (-1) 0 (-1)) 0.5 (metal $ Vec3 0.8 0.8 0.8)
+              , ObjectSphere $ Sphere (Vec3 (-1) 0 (-1)) 0.5 (dielectric 1.5)
               ]
 
       -- colourFn :: (RandomGen g, MonadState g m) => Ray -> m Vec3

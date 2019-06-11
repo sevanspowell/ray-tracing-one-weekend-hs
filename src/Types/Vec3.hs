@@ -14,11 +14,9 @@ module Types.Vec3 ( Vec3(Vec3)
                   , squaredLength
                   , mkUnit
                   , dot
-                  , reflect
-                  , refract
                   ) where
 
-import Prelude (Float, Show, Eq, (+), (-), (*), (/), sqrt, negate, (.), Maybe(Just, Nothing), (>), ($))
+import Prelude (Float, Show, Eq, (+), (-), (*), (/), sqrt, negate, (.))
 import Control.Lens.TH (makeLenses)
 
 data Vec3 = Vec3 { _vec3X :: Float
@@ -57,30 +55,3 @@ mkUnit v = v `scale` (1 / length v)
 
 dot :: Vec3 -> Vec3 -> Float
 dot (Vec3 x1 y1 z1) (Vec3 x2 y2 z2) = x1*x2 + y1*y2 + z1*z2
-
-reflect
-  :: Vec3
-  -- ^ Reflect this ray
-  -> Vec3
-  -- ^ around this normal
-  -> Vec3
-reflect v n = v `sub` (n `scale` (2 * dot v n))
-
-refract
-  :: Vec3
-  -- ^ Reflect this ray
-  -> Vec3
-  -- ^ around this normal
-  -> Float
-  -- ^ refractive indices ratio: ni/nt
-  -> Maybe Vec3
-  -- ^ return refracted ray or, if reflected, return nothing.
-refract v n niOverNt =
-  let
-    uv = mkUnit v
-    dt = dot uv n
-    discriminant = 1.0 - niOverNt*niOverNt*(1-dt*dt)
-  in
-    if discriminant > 0
-    then Just $ ((uv `sub` (n `scale` dt)) `scale` niOverNt) `sub` (n `scale` sqrt(discriminant))
-    else Nothing

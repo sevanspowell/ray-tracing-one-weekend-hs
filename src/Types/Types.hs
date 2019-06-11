@@ -8,7 +8,7 @@ import Control.Monad.State.Class (MonadState)
 import System.Random (RandomGen)
 import Types.Random (randomInUnitSphere)
 import Types.Ray (Ray, mkRay, rayDir)
-import Types.Vec3 (Vec3, add, sub, reflect)
+import Types.Vec3 (Vec3(Vec3), add, sub, dot, scale, mkUnit)
 
 data ScatteredRay
   = ScatteredRay { _scatAttenuation  :: Vec3
@@ -39,6 +39,41 @@ type HitFn m a
   -> Maybe (HitInfo m)
   -- ^ returning this info.
 
+reflect
+  :: Vec3
+  -- ^ Reflect this ray
+  -> Vec3
+  -- ^ around this normal
+  -> Vec3
+reflect v n = v `sub` (n `scale` (2 * dot v n))
+
+refract
+  :: Vec3
+  -- ^ Reflect this ray
+  -> Vec3
+  -- ^ around this normal
+  -> Float
+  -- ^ refractive indices ratio: ni/nt
+  -> Maybe Vec3
+  -- ^ return refracted ray or, if reflected, return nothing.
+refract v n niOverNt =
+  let
+    uv = mkUnit v
+    dt = dot uv n
+    discriminant = 1.0 - niOverNt*niOverNt*(1-dt*dt)
+  in
+    if discriminant > 0
+    then Just $ ((uv `sub` (n `scale` dt)) `scale` niOverNt) `sub` (n `scale` sqrt(discriminant))
+    else Nothing
+
+schlick :: Float -> Float -> Float
+schlick cosine refIdx =
+  let
+    r0 = (1 - refIdx) / (1 + refIdx)
+    r0Squared = r0 * r0
+  in
+    r0Squared + (1 - r0Squared) * ((1 - cosine) ^ 5)
+
 lambertian
   :: ( RandomGen g
      , MonadState g m
@@ -68,8 +103,22 @@ metal albedo rayIn hi =
   in
     pure . Just $ ScatteredRay attenuation scattered
 
--- dielectrics
---   :: Float
---   -- ^ Reflective index
---   -> Material m
--- dielectrics reflIndex rayIn hi =
+dielectric
+  :: Applicative m
+  => Float
+  -- ^ Reflective index
+  -> Material m
+dielectric reflIndex rayIn hi =
+  let
+    rayInDir                  = rayIn ^. rayDir
+    surfaceNormal             = hi ^. hiNormal
+    -- reflected                 = reflect rayInDir surfaceNormal
+    attenuation               = Vec3 1 1 1
+    (outwardNormal, niOverNt) =
+      if (dot rayInDir surfaceNormal) > 0
+      then (surfaceNormal `scale` (-1), reflIndex)
+      else (surfaceNormal, 1.0 / reflIndex)
+  in
+    case refract rayInDir outwardNormal niOverNt of
+      Just refracted -> pure . Just $ ScatteredRay attenuation (mkRay (hi ^. hiPos) refracted)
+      Nothing        -> pure Nothing
